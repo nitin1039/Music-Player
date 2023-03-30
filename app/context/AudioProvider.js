@@ -1,27 +1,35 @@
 import React, { useState, useEffect, createContext } from "react";
 import { Text, View, Alert } from "react-native";
 import * as MediaLibrary from "expo-media-library";
+import { DataProvider } from "recyclerlistview";
 
 export const AudioContext = createContext();
 
-const AudioProvider = (props) => {
+const AudioProvider = ({ children }) => {
   const [audioFiles, setAudioFiles] = useState([]);
   const [permissionError, setPermissionError] = useState(false);
+  const [dataProvider, setDataProvider] = useState(
+    new DataProvider((r1, r2) => r1 !== r2)
+  );
 
   const permissionAlert = () => {
-    Alert.alert("Permission Required", "This app needs to read audio files!", [
-      {
-        text: "I am ready",
-        onPress: () => getPermission(),
-      },
-      {
-        text: "cancle",
-        onPress: () => permissionAlert(),
-      },
-    ]);
+    Alert.alert(
+      "Permission Required",
+      "This app needs to read audio files!",
+      [
+        {
+          text: "I am ready",
+          onPress: () => getPermission(),
+        },
+        {
+          text: "cancle",
+          onPress: () => permissionAlert(),
+        },
+      ]
+    );
   };
 
-  const getAudioFlies = async () => {
+  const getAudioFiles = async () => {
     let media = await MediaLibrary.getAssetsAsync({
       mediaType: "audio",
     });
@@ -30,32 +38,30 @@ const AudioProvider = (props) => {
       first: media.totalCount,
     });
 
-    setAudioFiles(media.assets);
+    setDataProvider(
+      dataProvider.cloneWithRows([...audioFiles, ...media.assets])
+    );
+    setAudioFiles([...audioFiles, ...media.assets]);
   };
 
   const getPermission = async () => {
     const permission = await MediaLibrary.getPermissionsAsync();
     if (permission.granted) {
-      //we want to get all the audio files
-      getAudioFlies();
+      getAudioFiles();
     }
     if (!permission.canAskAgain && !permission.granted) {
       setPermissionError(true);
     }
-
     if (!permission.granted && permission.canAskAgain) {
       const { status, canAskAgain } =
         await MediaLibrary.requestPermissionsAsync();
       if (status === "denied" && canAskAgain) {
-        //we are going to display alert that user must allow this permission to work this app
         permissionAlert();
       }
       if (status === "granted") {
-        //we want to get all the media files
-        getAudioFlies();
+        getAudioFiles();
       }
       if (status === "denied" && !canAskAgain) {
-        //we are going to display an error to the user
         setPermissionError(true);
       }
     }
@@ -65,17 +71,19 @@ const AudioProvider = (props) => {
     getPermission();
   }, []);
 
-  if (permissionError)
+  if (permissionError) {
     return (
       <View style={{ flex: 1, justifyContent: "centre", alignItems: "center" }}>
         <Text style={{ fontSize: 25, textAlign: "center", color: "red" }}>
-          It looks like you haven't accept the permission.
+          It looks like you haven't accepted the permission.
         </Text>
       </View>
     );
+  }
+
   return (
-    <AudioContext.Provider value={{ audioFiles }}>
-      {props.children}
+    <AudioContext.Provider value={{ audioFiles, dataProvider }}>
+      {children}
     </AudioContext.Provider>
   );
 };
